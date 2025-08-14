@@ -157,18 +157,18 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # --- Flask Webhook Handler ---
 app = Flask(__name__)
-application = Application.builder().token(BOT_TOKEN).build()
-app.add_url_rule('/' + BOT_TOKEN, 'webhook_handler', webhook_handler, methods=['POST'])
-app.add_url_rule('/payment_webhook', 'handle_payment_webhook', handle_payment_webhook, methods=['POST'])
 
+# Define handlers before they are added to the app
 async def webhook_handler():
     # This route receives updates from Telegram
+    application = get_application()
     update = Update.de_json(request.get_json(force=True), application.bot)
     await application.process_update(update)
     return jsonify({'status': 'ok'})
 
 async def handle_payment_webhook():
     # This endpoint receives webhooks from a payment gateway like Razorpay or Stripe
+    app_instance = get_application()
     data = request.json
     logging.info(f"Received payment webhook: {data}")
     
@@ -183,18 +183,25 @@ async def handle_payment_webhook():
         
         if folder_id and grant_drive_access(user_email, folder_id):
             message = fr"Congratulations\! Your payment for the {course_name.upper()} course has been verified\. You now have access to the Google Drive folder\."
-            await application.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
+            await app_instance.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
             return jsonify({'status': 'success'}), 200
     
     return jsonify({'status': 'not handled'}), 200
+
+def get_application():
+    application = Application.builder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler('start', start_command))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
+    load_user_states()
+    return application
+
+# Add the URL rules to the Flask app
+app.add_url_rule('/' + BOT_TOKEN, 'webhook_handler', webhook_handler, methods=['POST'])
+app.add_url_rule('/payment_webhook', 'handle_payment_webhook', handle_payment_webhook, methods=['POST'])
 
 # --- Main Bot Functionality ---
 if __name__ == '__main__':
     # This is for local testing with polling.
     # For Render, gunicorn will run the app
     load_user_states()
-    application.run_polling()
-
-# Expose the Flask app to Gunicorn
-# This is how Gunicorn finds the app
-# Use 'app' as the entry point in Render's Start Command: `gunicorn -k gevent --bind 0.0.0.0:8000 app:app`
+    get_application().run_polling()
