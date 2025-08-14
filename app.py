@@ -8,7 +8,7 @@ from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 from google.oauth2 import service_account
-from googleapiclient.discovery import build
+from googleapient.discovery import build
 
 # --- Configuration and Setup ---
 
@@ -30,7 +30,7 @@ DRIVE_LINKS = {
 
 # Payment pages for different courses. You must replace these with your actual Razorpay page URLs.
 PAYMENT_PAGES = {
-    "physics": "https://rzp.io/l/plink_R5I6j6sG4EpZTo",
+    "physics": "https://rzp.io/rzp/z8Gk4SW",
     # Add other courses here as you create their payment pages
     # "maths": "https://razorpay.me/@sureshotquestion/maths-course",
 }
@@ -136,10 +136,10 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                 payment_text = (
                     fr"To purchase the {subject.upper()} course for {price}, please use the link below\. After payment, send me your email address for Google Drive access\."
                 )
-                payment_url = f"{PAYMENT_PAGES[subject]}?meta.chat_id={user_id}&meta.course_name={subject}"
+                payment_url = PAYMENT_PAGES[subject]
                 
                 await update.message.reply_text(payment_text, parse_mode=ParseMode.MARKDOWN_V2)
-                await update.message.reply_text(payment_url) # Removed ParseMode.MARKDOWN_V2 from here
+                await update.message.reply_text(payment_url) # Sending the URL without Markdown parsing
 
             else:
                 await update.message.reply_text(fr"Sorry, I don\'t have a course for \'{subject}\'\. Please choose from PCM, Physics, Maths, Chemistry, or Bio\.", parse_mode=ParseMode.MARKDOWN_V2)
@@ -187,6 +187,28 @@ async def webhook_handler(request):
         logging.error(f"Error processing webhook: {e}")
         return web.Response(text=f"Error: {e}", status=500)
 
+async def handle_payment_webhook(request):
+    """This endpoint receives webhooks from a payment gateway like Razorpay or Stripe"""
+    app_instance = request.app['bot_app']
+    data = await request.json()
+    logging.info(f"Received payment webhook: {data}")
+    
+    # IMPORTANT: Implement webhook signature verification here for security.
+    
+    if data.get('event') == 'payment.completed':
+        user_email = data['payload']['payment']['entity']['email']
+        course_name = data['payload']['payment']['entity']['notes']['course']
+        user_chat_id = data['payload']['payment']['entity']['notes']['chat_id']
+        
+        folder_id = DRIVE_LINKS.get(course_name)
+        
+        if folder_id and grant_drive_access(user_email, folder_id):
+            message = fr"Congratulations\! Your payment for the {course_name.upper()} course has been verified\. You now have access to the Google Drive folder\."
+            await app_instance.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
+            return web.Response(text='ok')
+    
+    return web.Response(text='Event not handled', status=200)
+
 async def setup_webhook():
     """Sets up the bot application and registers the webhook handler."""
     load_user_states()
@@ -199,6 +221,7 @@ async def setup_webhook():
     web_app['bot_app'] = app_instance
     
     web_app.router.add_post(f'/{BOT_TOKEN}', webhook_handler)
+    web_app.router.add_post('/payment_webhook', handle_payment_webhook)
     
     await app_instance.initialize()
     await app_instance.bot.set_webhook(url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{BOT_TOKEN}")
