@@ -10,7 +10,6 @@ from telegram.constants import ParseMode
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import asyncio
-from asgiref.wsgi import WsgiToAsgi
 
 # --- Configuration and Setup ---
 
@@ -155,33 +154,21 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         await start_command(update, context)
 
+
 # --- Flask Webhook Handler ---
 app = Flask(__name__)
-# This is a flag to ensure the application is built only once
-application_instance = None
+application = Application.builder().token(BOT_TOKEN).build()
+app.add_url_rule('/' + BOT_TOKEN, 'webhook_handler', webhook_handler, methods=['POST'])
+app.add_url_rule('/payment_webhook', 'handle_payment_webhook', handle_payment_webhook, methods=['POST'])
 
-def get_application():
-    global application_instance
-    if application_instance is None:
-        application_instance = Application.builder().token(BOT_TOKEN).build()
-        application_instance.add_handler(CommandHandler('start', start_command))
-        application_instance.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
-        load_user_states()
-        logging.info("Telegram Application initialized.")
-    return application_instance
-
-@app.route('/' + BOT_TOKEN, methods=['POST'])
 async def webhook_handler():
     # This route receives updates from Telegram
-    app_instance = get_application()
-    update = Update.de_json(request.get_json(force=True), app_instance.bot)
-    await app_instance.process_update(update)
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    await application.process_update(update)
     return jsonify({'status': 'ok'})
 
-@app.route('/payment_webhook', methods=['POST'])
 async def handle_payment_webhook():
     # This endpoint receives webhooks from a payment gateway like Razorpay or Stripe
-    app_instance = get_application()
     data = request.json
     logging.info(f"Received payment webhook: {data}")
     
@@ -196,7 +183,7 @@ async def handle_payment_webhook():
         
         if folder_id and grant_drive_access(user_email, folder_id):
             message = fr"Congratulations\! Your payment for the {course_name.upper()} course has been verified\. You now have access to the Google Drive folder\."
-            await app_instance.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
+            await application.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
             return jsonify({'status': 'success'}), 200
     
     return jsonify({'status': 'not handled'}), 200
@@ -206,8 +193,8 @@ if __name__ == '__main__':
     # This is for local testing with polling.
     # For Render, gunicorn will run the app
     load_user_states()
-    get_application().run_polling()
+    application.run_polling()
 
 # Expose the Flask app to Gunicorn
 # This is how Gunicorn finds the app
-asgi_app = WsgiToAsgi(app)
+# Use 'app' as the entry point in Render's Start Command: `gunicorn -k gevent --bind 0.0.0.0:8000 app:app`
