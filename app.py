@@ -5,7 +5,7 @@ import os
 import re
 from flask import Flask, request, jsonify
 from telegram import Bot, Update
-from telegram.ext import Dispatcher, CommandHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -84,14 +84,21 @@ def grant_drive_access(email, folder_id):
 # --- Telegram Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_message = (
-        f"Hello there, {update.effective_user.first_name}\! Welcome to Arvind Academy\'s Sure Shot Questions bot\\.\n"
-        "I\'m here to help you with information about our educational courses\\.\n\n"
-        "You can ask me about our courses by typing one of the following:\n"
-        "\\- `buy <subject>` \\- to start a purchase\n"
-        "\\- `price` \\- See all pricing details\n"
-        "\\- `pcm` \\- Get details about the PCM combo\n"
-        "\\- `bio` \\- Get details about the Biology course\n\n"
-        "Here\'s a quick look at what we offer:"
+        fr"Hello there, {update.effective_user.first_name}\! Welcome to Arvind Academy\'s Sure Shot Questions bot\."
+        "\n\n"
+        fr"I\'m here to help you with information about our educational courses\."
+        "\n\n"
+        r"You can ask me about our courses by typing one of the following:"
+        "\n"
+        r"\- `buy <subject>` \- to start a purchase"
+        "\n"
+        r"\- `price` \- See all pricing details"
+        "\n"
+        r"\- `pcm` \- Get details about the PCM combo"
+        "\n"
+        r"\- `bio` \- Get details about the Biology course"
+        "\n\n"
+        r"Here\'s a quick look at what we offer:"
     )
     # IMPORTANT: You must replace this placeholder URL with the actual public URL of your image.
     promo_image_url = "poster.jpg"
@@ -101,7 +108,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_photo(chat_id=update.effective_chat.id, photo=promo_image_url)
     except Exception as e:
         logging.error(f"Failed to send start message: {e}")
-        await update.message.reply_text("Sorry, I couldn\'t send the welcome message\. This might be because the image URL is invalid\.", parse_mode=ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(r"Sorry, I couldn\'t send the welcome message\. This might be because the image URL is invalid\.", parse_mode=ParseMode.MARKDOWN_V2)
 
 async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
@@ -118,13 +125,13 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
 
                 price = "250₹" if subject == "pcm" else "100₹"
                 payment_text = (
-                    f"To purchase the {subject.upper()} course for {price}, please complete the payment and then send me your email address for Google Drive access\\."
+                    fr"To purchase the {subject.upper()} course for {price}, please complete the payment and then send me your email address for Google Drive access\."
                 )
                 await update.message.reply_text(payment_text, parse_mode=ParseMode.MARKDOWN_V2)
             else:
-                await update.message.reply_text(f"Sorry, I don\'t have a course for \'{subject}\'\. Please choose from PCM, Physics, Maths, Chemistry, or Bio\.", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text(fr"Sorry, I don\'t have a course for \'{subject}\'\. Please choose from PCM, Physics, Maths, Chemistry, or Bio\.", parse_mode=ParseMode.MARKDOWN_V2)
         else:
-            await update.message.reply_text("Please specify a course you want to buy, for example: `buy pcm`\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(r"Please specify a course you want to buy, for example: `buy pcm`\.", parse_mode=ParseMode.MARKDOWN_V2)
     elif user_message in ["price", "cost", "how much"]:
         promotional_text = (
             "Arvind Academy\'s 🔥Sure Shot Questions🔥LATEST 2025 🔥\n\n"
@@ -140,23 +147,25 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
             user_states[user_id]['email'] = email
             user_states[user_id]['status'] = 'payment_requested'
             save_user_states()
-            await update.message.reply_text(f"Thank you, {update.effective_user.first_name}\! Your email address \'{email}\' has been recorded\. I will grant you access after payment is verified\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(fr"Thank you, {update.effective_user.first_name}\! Your email address \'{email}\' has been recorded\. I will grant you access after payment is verified\.", parse_mode=ParseMode.MARKDOWN_V2)
         else:
-            await update.message.reply_text("That doesn\'t look like a valid email address\. Please try again\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(r"That doesn\'t look like a valid email address\. Please try again\.", parse_mode=ParseMode.MARKDOWN_V2)
     else:
         await start_command(update, context)
 
 # --- Flask Webhook Handler ---
 app = Flask(__name__)
 application = ApplicationBuilder().token(BOT_TOKEN).build()
-dispatcher = application.dispatcher
-load_user_states()
 
-@app.route('/', methods=['POST'])
-def webhook_handler():
+# Register Telegram handlers
+application.add_handler(CommandHandler('start', start_command))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
+
+@app.route('/' + BOT_TOKEN, methods=['POST'])
+async def webhook_handler():
     # This route receives updates from Telegram
     update = Update.de_json(request.get_json(force=True), application.bot)
-    dispatcher.process_update(update)
+    await application.process_update(update)
     return jsonify({'status': 'ok'})
 
 @app.route('/payment_webhook', methods=['POST'])
@@ -166,8 +175,6 @@ def handle_payment_webhook():
     logging.info(f"Received payment webhook: {data}")
     
     # IMPORTANT: Implement webhook signature verification here for security.
-    # This is a critical step to ensure the request is from a legitimate source.
-    # The code below is a simplified placeholder.
     
     if data.get('event') == 'payment.completed':
         user_email = data['payload']['payment']['entity']['email']
@@ -177,19 +184,13 @@ def handle_payment_webhook():
         folder_id = DRIVE_LINKS.get(course_name)
         
         if folder_id and grant_drive_access(user_email, folder_id):
-            message = f"Congratulations! Your payment for the {course_name.upper()} course has been verified. You now have access to the Google Drive folder."
-            bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
+            message = fr"Congratulations\! Your payment for the {course_name.upper()} course has been verified\. You now have access to the Google Drive folder\."
+            application.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
             return jsonify({'status': 'success'}), 200
     
     return jsonify({'status': 'not handled'}), 200
 
-# Register Telegram handlers
-dispatcher.add_handler(CommandHandler('start', start_command))
-dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
-
 # --- Main Bot Functionality ---
 if __name__ == '__main__':
-    # This is for local testing with polling.
-    # For Render deployment, the Flask app will handle everything.
-    print("Bot is running in webhook mode.")
-    # The Flask app will be run by Gunicorn on Render
+    load_user_states()
+    application.run_polling()
