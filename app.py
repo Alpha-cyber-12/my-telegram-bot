@@ -2,7 +2,6 @@
 import logging
 import json
 import os
-import sys
 import re
 from aiohttp import web
 from telegram import Bot, Update
@@ -27,6 +26,13 @@ DRIVE_LINKS = {
     "maths": "1LCCFMCYUDXj81CWf3t5qZv9rVuUcGz2i",
     "chemistry": "1eEtJdYEBpsDoS0gZvPQOmUTBCL6qjM-A",
     "bio": "1eq2ZDabtXYGQjOhW1UYwTNTCFCWg3mFB"
+}
+
+# Payment pages for different courses. You must replace these with your actual Razorpay page URLs.
+PAYMENT_PAGES = {
+    "physics": "https://rzp.io/l/plink_R5I6j6sG4EpZTo",
+    # Add other courses here as you create their payment pages
+    # "maths": "https://razorpay.me/@sureshotquestion/maths-course",
 }
 
 # A dictionary to persistently store user states (e.g., what they want to buy)
@@ -98,6 +104,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         r"\- `pcm` \- Get details about the PCM combo"
         "\n"
         r"\- `bio` \- Get details about the Biology course"
+        "\n"
+        r"\- `physics` \- Get details about the Physics course"
         "\n\n"
         r"Here\'s a quick look at what we offer:"
     )
@@ -120,15 +128,19 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         parts = user_message.split()
         if len(parts) > 1:
             subject = parts[1]
-            if subject in DRIVE_LINKS:
+            if subject in DRIVE_LINKS and subject in PAYMENT_PAGES:
                 user_states[user_id] = {'course': subject, 'status': 'awaiting_payment'}
                 save_user_states()
 
                 price = "250₹" if subject == "pcm" else "100₹"
                 payment_text = (
-                    fr"To purchase the {subject.upper()} course for {price}, please complete the payment and then send me your email address for Google Drive access\."
+                    fr"To purchase the {subject.upper()} course for {price}, please use the link below\. After payment, send me your email address for Google Drive access\."
                 )
+                payment_url = f"{PAYMENT_PAGES[subject]}?meta.chat_id={user_id}&meta.course_name={subject}"
+                
                 await update.message.reply_text(payment_text, parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text(payment_url, parse_mode=ParseMode.MARKDOWN_V2)
+
             else:
                 await update.message.reply_text(fr"Sorry, I don\'t have a course for \'{subject}\'\. Please choose from PCM, Physics, Maths, Chemistry, or Bio\.", parse_mode=ParseMode.MARKDOWN_V2)
         else:
@@ -142,6 +154,14 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
             "🔥 BIO \(EXCLUSIVE\) \- 100₹"
         )
         await update.message.reply_text(promotional_text, parse_mode=ParseMode.MARKDOWN_V2)
+    elif user_message == "physics":
+        await update.message.reply_text(r"The 🔥Physics🔥 course is 100₹ with \[ HD PDF \] solutions\.", parse_mode=ParseMode.MARKDOWN_V2)
+    elif user_message in ["pcm", "combo"]:
+        await update.message.reply_text(r"The 🔥PCM Combo🔥 is 250₹ with \[ HD PDF \] solutions\.", parse_mode=ParseMode.MARKDOWN_V2)
+    elif user_message in ["bio", "biology"]:
+        await update.message.reply_text(r"The 🔥BIO \(EXCLUSIVE\)🔥 is 100₹ with \[ HD PDF \] solutions\.", parse_mode=ParseMode.MARKDOWN_V2)
+    elif user_message in ["single", "single subject"]:
+        await update.message.reply_text(r"Each 🔥Single Subject🔥 is 100₹ with \[ HD PDF \] solutions\.", parse_mode=ParseMode.MARKDOWN_V2)
     elif user_id in user_states and user_states[user_id].get('status') == 'awaiting_email':
         email = update.message.text.strip()
         if re.match(r"[^@]+@[^@]+\.[^@]+", email):
