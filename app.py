@@ -136,10 +136,10 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                 payment_text = (
                     fr"To purchase the {subject.upper()} course for {price}, please use the link below\. After payment, send me your email address for Google Drive access\."
                 )
-                payment_url = fr"{PAYMENT_PAGES[subject]}\?meta\.chat_id={user_id}&meta\.course_name={subject}"
+                payment_url = f"{PAYMENT_PAGES[subject]}?meta.chat_id={user_id}&meta.course_name={subject}"
                 
                 await update.message.reply_text(payment_text, parse_mode=ParseMode.MARKDOWN_V2)
-                await update.message.reply_text(payment_url, parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text(payment_url) # Removed ParseMode.MARKDOWN_V2 from here
 
             else:
                 await update.message.reply_text(fr"Sorry, I don\'t have a course for \'{subject}\'\. Please choose from PCM, Physics, Maths, Chemistry, or Bio\.", parse_mode=ParseMode.MARKDOWN_V2)
