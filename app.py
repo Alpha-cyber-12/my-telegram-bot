@@ -127,7 +127,7 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text("Please specify a course you want to buy, for example: `buy pcm`\.", parse_mode=ParseMode.MARKDOWN_V2)
     elif user_message in ["price", "cost", "how much"]:
         promotional_text = (
-            "Arvind Academy\'s 🔥Sure Shot Questions🔥LATEST 2025 🔥\n\n"
+            "Arvind Academy\'s 🔥Sure Shot Questions🔥LATEST 2025 �\n\n"
             "ALL WITH \[ HD PDF \] SOLUTIONS\n\n"
             "🔥PCM Combo: 250₹\n\n"
             "🔥Single Subject: 100₹\n\n"
@@ -193,3 +193,4 @@ if __name__ == '__main__':
     # For Render deployment, the Flask app will handle everything.
     print("Bot is running in webhook mode.")
     # The Flask app will be run by Gunicorn on Render
+�
