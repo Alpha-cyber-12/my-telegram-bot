@@ -9,6 +9,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from telegram.constants import ParseMode
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import asyncio
 
 # --- Configuration and Setup ---
 
