@@ -1,0 +1,4 @@
+Flask
+python-telegram-bot
+google-api-python-client
+google-auth
