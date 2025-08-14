@@ -1,8 +1,8 @@
 # Import necessary libraries
 import logging
+import json
 import os
 import sys
-import json
 import re
 from aiohttp import web
 from telegram import Bot, Update
@@ -188,4 +188,4 @@ async def setup_webhook():
 # --- Main Bot Functionality ---
 if __name__ == '__main__':
     print("Bot is ready to receive webhooks.")
-    web.run_app(setup_webhook(), port=os.environ.get('PORT', 8000))
+    web.run_app(setup_webhook(), port=int(os.environ.get('PORT', 8000)))
