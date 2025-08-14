@@ -155,35 +155,37 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         await start_command(update, context)
 
-
 # --- Flask Webhook Handler ---
 app = Flask(__name__)
 # This is a flag to ensure the application is built only once
 application_instance = None
 
-@app.before_first_request
-def initialize_application():
+def get_application():
     global application_instance
     if application_instance is None:
-        application_instance = ApplicationBuilder().token(BOT_TOKEN).build()
+        application_instance = Application.builder().token(BOT_TOKEN).build()
         application_instance.add_handler(CommandHandler('start', start_command))
         application_instance.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
         load_user_states()
         logging.info("Telegram Application initialized.")
+    return application_instance
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
 async def webhook_handler():
     # This route receives updates from Telegram
-    if application_instance:
-        update = Update.de_json(request.get_json(force=True), application_instance.bot)
-        await application_instance.process_update(update)
+    app_instance = get_application()
+    update = Update.de_json(request.get_json(force=True), app_instance.bot)
+    await app_instance.process_update(update)
     return jsonify({'status': 'ok'})
 
 @app.route('/payment_webhook', methods=['POST'])
-def handle_payment_webhook():
+async def handle_payment_webhook():
     # This endpoint receives webhooks from a payment gateway like Razorpay or Stripe
+    app_instance = get_application()
     data = request.json
     logging.info(f"Received payment webhook: {data}")
+    
+    # IMPORTANT: Implement webhook signature verification here for security.
     
     if data.get('event') == 'payment.completed':
         user_email = data['payload']['payment']['entity']['email']
@@ -194,18 +196,18 @@ def handle_payment_webhook():
         
         if folder_id and grant_drive_access(user_email, folder_id):
             message = fr"Congratulations\! Your payment for the {course_name.upper()} course has been verified\. You now have access to the Google Drive folder\."
-            application_instance.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
+            await app_instance.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
             return jsonify({'status': 'success'}), 200
     
     return jsonify({'status': 'not handled'}), 200
 
 # --- Main Bot Functionality ---
 if __name__ == '__main__':
-    load_user_states()
-    # For local testing, use a standard Flask run command
-    # app.run()
+    # This is for local testing with polling.
     # For Render, gunicorn will run the app
-    pass
+    load_user_states()
+    get_application().run_polling()
 
 # Expose the Flask app to Gunicorn
+# This is how Gunicorn finds the app
 asgi_app = WsgiToAsgi(app)
