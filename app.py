@@ -154,18 +154,30 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         await start_command(update, context)
 
-
 # --- Flask Webhook Handler ---
 app = Flask(__name__)
+# This is a flag to ensure the application is built only once
+application_instance = None
 
-# Define handlers before they are added to the app
+def get_application():
+    global application_instance
+    if application_instance is None:
+        application_instance = Application.builder().token(BOT_TOKEN).build()
+        application_instance.add_handler(CommandHandler('start', start_command))
+        application_instance.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
+        load_user_states()
+        logging.info("Telegram Application initialized.")
+    return application_instance
+
+@app.route('/' + BOT_TOKEN, methods=['POST'])
 async def webhook_handler():
     # This route receives updates from Telegram
-    application = get_application()
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    await application.process_update(update)
+    app_instance = get_application()
+    update = Update.de_json(request.get_json(force=True), app_instance.bot)
+    await app_instance.process_update(update)
     return jsonify({'status': 'ok'})
 
+@app.route('/payment_webhook', methods=['POST'])
 async def handle_payment_webhook():
     # This endpoint receives webhooks from a payment gateway like Razorpay or Stripe
     app_instance = get_application()
@@ -187,17 +199,6 @@ async def handle_payment_webhook():
             return jsonify({'status': 'success'}), 200
     
     return jsonify({'status': 'not handled'}), 200
-
-def get_application():
-    application = Application.builder().token(BOT_TOKEN).build()
-    application.add_handler(CommandHandler('start', start_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
-    load_user_states()
-    return application
-
-# Add the URL rules to the Flask app
-app.add_url_rule('/' + BOT_TOKEN, 'webhook_handler', webhook_handler, methods=['POST'])
-app.add_url_rule('/payment_webhook', 'handle_payment_webhook', handle_payment_webhook, methods=['POST'])
 
 # --- Main Bot Functionality ---
 if __name__ == '__main__':
