@@ -30,7 +30,7 @@ DRIVE_LINKS = {
 
 # Payment pages for different courses. You must replace these with your actual Razorpay page URLs.
 PAYMENT_PAGES = {
-    "physics": "https://rzp.io/l/plink_R5I6j6sG4EpZTo",
+    "physics": "https://rzp.io/rzp/ILH66hNm",
     # Add other courses here as you create their payment pages
     # "maths": "https://razorpay.me/@sureshotquestion/maths-course",
 }
@@ -199,6 +199,7 @@ async def setup_webhook():
     web_app['bot_app'] = app_instance
     
     web_app.router.add_post(f'/{BOT_TOKEN}', webhook_handler)
+    web_app.router.add_post('/payment_webhook', handle_payment_webhook)
     
     await app_instance.initialize()
     await app_instance.bot.set_webhook(url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{BOT_TOKEN}")
