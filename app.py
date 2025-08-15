@@ -9,6 +9,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from telegram.constants import ParseMode
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+
 # --- Configuration and Setup ---
 
 # Your bot's token from Render environment variables
@@ -138,7 +139,7 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                 payment_url = f"{PAYMENT_PAGES[subject]}?meta.chat_id={user_id}&meta.course_name={subject}"
                 
                 await update.message.reply_text(payment_text, parse_mode=ParseMode.MARKDOWN_V2)
-                await update.message.reply_text(payment_url) # Removed ParseMode.MARKDOWN_V2 from here
+                await update.message.reply_text(payment_url) # Sending the URL without Markdown parsing
 
             else:
                 await update.message.reply_text(fr"Sorry, I don\'t have a course for \'{subject}\'\. Please choose from PCM, Physics, Maths, Chemistry, or Bio\.", parse_mode=ParseMode.MARKDOWN_V2)
