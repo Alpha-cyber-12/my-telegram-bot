@@ -8,8 +8,7 @@ from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 from google.oauth2 import service_account
-from googleapient.discovery import build
-
+from googleapiclient.discovery import build
 # --- Configuration and Setup ---
 
 # Your bot's token from Render environment variables
