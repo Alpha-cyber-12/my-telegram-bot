@@ -8,7 +8,7 @@ from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 from google.oauth2 import service_account
-from googleapiclient.discovery import build
+from googleapient.discovery import build
 
 # --- Configuration and Setup ---
 
@@ -186,6 +186,28 @@ async def webhook_handler(request):
     except Exception as e:
         logging.error(f"Error processing webhook: {e}")
         return web.Response(text=f"Error: {e}", status=500)
+
+async def handle_payment_webhook(request):
+    """This endpoint receives webhooks from a payment gateway like Razorpay or Stripe"""
+    app_instance = request.app['bot_app']
+    data = await request.json()
+    logging.info(f"Received payment webhook: {data}")
+    
+    # IMPORTANT: Implement webhook signature verification here for security.
+    
+    if data.get('event') == 'payment.completed':
+        user_email = data['payload']['payment']['entity']['email']
+        course_name = data['payload']['payment']['entity']['notes']['course']
+        user_chat_id = data['payload']['payment']['entity']['notes']['chat_id']
+        
+        folder_id = DRIVE_LINKS.get(course_name)
+        
+        if folder_id and grant_drive_access(user_email, folder_id):
+            message = fr"Congratulations\! Your payment for the {course_name.upper()} course has been verified\. You now have access to the Google Drive folder\."
+            await app_instance.bot.send_message(chat_id=user_chat_id, text=message, parse_mode=ParseMode.MARKDOWN_V2)
+            return web.Response(text='ok')
+    
+    return web.Response(text='Event not handled', status=200)
 
 async def setup_webhook():
     """Sets up the bot application and registers the webhook handler."""
